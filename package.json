@@ -1,0 +1,16 @@
+{
+  "name": "relay-defer-check-bug",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reproduction: environment.check() returns 'missing' during @defer streaming",
+  "scripts": {
+    "relay": "relay-compiler",
+    "repro": "node repro.mjs"
+  },
+  "dependencies": {
+    "relay-runtime": "^17.0.0"
+  },
+  "devDependencies": {
+    "relay-compiler": "^17.0.0"
+  }
+}

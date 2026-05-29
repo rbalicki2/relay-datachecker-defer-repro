@@ -1,0 +1,12 @@
+extend type Pin {
+  saved: Boolean
+  savedInfo: SaveTarget
+}
+
+type SaveTarget {
+  boardId: ID
+}
+
+extend type Viewer {
+  localSetting: String
+}

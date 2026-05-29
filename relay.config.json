@@ -1,0 +1,10 @@
+{
+  "src": "./src",
+  "schema": "./schema.graphql",
+  "schemaExtensions": ["./src"],
+  "language": "javascript",
+  "eagerEsModules": false,
+  "featureFlags": {
+    "enable_relay_resolver_transform": false
+  }
+}
