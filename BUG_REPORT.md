@@ -2,20 +2,13 @@
 
 ## Summary
 
-When a query uses `@defer`, the `DataChecker` (used by `environment.check()`) traverses into the deferred selections unconditionally. Client extension fields inside the `@defer` block are legitimately absent (they're never server-delivered), but their "missing" status leaks out to the overall `check()` result.
+When a query uses `@defer` and the deferred fragment contains client extension fields, `environment.check()` incorrectly returns `{status: 'missing'}` even when all server-delivered data is present in the store.
 
-This causes `environment.check()` to return `"missing"` even though:
-- Streaming completed successfully and all server-delivered fields are in the store
-- The UI renders correctly (data is available via fragment reads)
-- The only "missing" fields are client extensions that are never server-delivered
-
-## Impact
-
-In production, this causes unnecessary refetches. The data is fully available for rendering, but Relay's cache check reports the operation as incomplete, triggering redundant network requests. With 12+ pins each containing ~56 client extension fields inside `@defer` blocks, this produces 728 false "missing" fields.
+Client extension fields are never server-delivered — they are expected to be absent. The `ClientExtension` case in `DataChecker` correctly handles this by saving/restoring `_recordWasMissing`. But when those same client extension fields are nested inside a `@defer` block, the `Defer` case does **not** save/restore `_recordWasMissing`, so the "missing" status leaks out.
 
 ## Root Cause
 
-**File:** `relay-runtime/store/DataChecker.js`
+**File:** `packages/relay-runtime/store/DataChecker.js`
 
 ```javascript
 case 'Defer':
@@ -24,17 +17,37 @@ case 'Stream':
   break;
 ```
 
-The `Defer` case unconditionally traverses into deferred selections **without saving/restoring `_recordWasMissing`**. Compare with the `ClientExtension` case which correctly isolates missing fields:
+Compare with `ClientExtension` which correctly isolates:
 
 ```javascript
-case CLIENT_EXTENSION:
-  var recordWasMissing = this._recordWasMissing;
+case 'ClientExtension': {
+  const recordWasMissing = this._recordWasMissing;
   this._traverseSelections(selection.selections, dataID);
   this._recordWasMissing = recordWasMissing;
   break;
+}
 ```
 
-When `@defer` is active, client extension fields inside the block are expected to be absent. Their "missing" status should not propagate to the overall `check()` result.
+## Fix
+
+```javascript
+case 'Defer':
+case 'Stream': {
+  const isDeferred =
+    selection.if == null ||
+    Boolean(this._getVariableValue(selection.if));
+  if (isDeferred) {
+    const prevRecordWasMissing = this._recordWasMissing;
+    this._traverseSelections(selection.selections, dataID);
+    this._recordWasMissing = prevRecordWasMissing;
+  } else {
+    this._traverseSelections(selection.selections, dataID);
+  }
+  break;
+}
+```
+
+When `@defer` is inactive (`if: false`), fields are expected inline and their absence is genuinely "missing".
 
 ## Reproduction
 
@@ -44,32 +57,6 @@ npm run relay
 npm run repro
 ```
 
-## Fix
-
-Save/restore `_recordWasMissing` when `@defer` is active, mirroring what `ClientExtension` already does:
-
-```javascript
-case 'Defer':
-case 'Stream': {
-  const isDeferred =
-    selection.if == null ||
-    Boolean(this._getVariableValue(selection.if));
-  if (isDeferred) {
-    // Defer is active: client extension fields inside are expected to
-    // be absent. Their missing status should not propagate.
-    const prevRecordWasMissing = this._recordWasMissing;
-    this._traverseSelections(selection.selections, dataID);
-    this._recordWasMissing = prevRecordWasMissing;
-  } else {
-    // Defer is inactive (if: false): fields are expected inline.
-    this._traverseSelections(selection.selections, dataID);
-  }
-  break;
-}
-```
-
-When `@defer(if: $var)` has `$var = false` (defer inactive), fields are expected inline and their absence is a real "missing".
-
 ## Repositories
 
 - **Reproduction:** https://github.com/rbalicki2/relay-datachecker-defer-repro
@@ -77,24 +64,5 @@ When `@defer(if: $var)` has `$var = false` (defer inactive), fields are expected
 
 ## Environment
 
-- `relay-runtime`: 17.0.0 (also confirmed on `0.0.0-main-531c3803`)
-- Node.js (no browser/React needed to reproduce)
-
-## Production Scenario
-
-```graphql
-query FeedQuery($shouldDefer: Boolean!) {
-  feed {
-    edges {
-      node {
-        ...PinCard_pin
-        ... @defer(if: $shouldDefer, label: "FeedQuery$defer$PinContextMenu") {
-          ...PinContextMenu_pin
-        }
-      }
-    }
-  }
-}
-```
-
-Where `PinContextMenu_pin` contains client extension fields (`saved`, `savedInfo`, `adTargetingAttribution` sub-fields, etc.) that are never server-delivered. After streaming completes, all server data is present, but `check()` reports "missing" due to these client extension fields inside the `@defer` block.
+- `relay-runtime`: 17.0.0
+- Node.js
