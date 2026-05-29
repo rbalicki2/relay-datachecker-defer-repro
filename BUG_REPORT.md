@@ -85,6 +85,11 @@ case 'Stream': {
 
 When `@defer(if: $var)` has `$var = false` (defer inactive), fields are expected inline and their absence is a real "missing".
 
+## Repositories
+
+- **Reproduction:** https://github.com/rbalicki2/relay-datachecker-defer-repro
+- **Fix branch:** https://github.com/rbalicki2/relay/tree/fix/datachecker-defer-missing-status
+
 ## Environment
 
 - `relay-runtime`: 17.0.0 (also confirmed on `0.0.0-main-531c3803`)
