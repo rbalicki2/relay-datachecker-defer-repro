@@ -2,7 +2,7 @@
 
 ## Summary
 
-When a query uses `@defer`, the `DataChecker` (used by `environment.check()`) traverses into the deferred selections unconditionally. If client extension fields inside the `@defer` block are absent (which is expected — they're never server-delivered), or if the incremental payload hasn't arrived yet, the "missing" status leaks out to the overall `check()` result.
+When a query uses `@defer`, the `DataChecker` (used by `environment.check()`) traverses into the deferred selections unconditionally. Client extension fields inside the `@defer` block are legitimately absent (they're never server-delivered), but their "missing" status leaks out to the overall `check()` result.
 
 This causes `environment.check()` to return `"missing"` even though:
 - Streaming completed successfully and all server-delivered fields are in the store
@@ -15,7 +15,7 @@ In production, this causes unnecessary refetches. The data is fully available fo
 
 ## Root Cause
 
-**File:** `relay-runtime/store/DataChecker.js`, lines 251–254
+**File:** `relay-runtime/store/DataChecker.js`
 
 ```javascript
 case 'Defer':
@@ -34,7 +34,7 @@ case CLIENT_EXTENSION:
   break;
 ```
 
-When `@defer` is active, any fields inside the block that are missing (whether client extensions or server fields not yet delivered via incremental payload) should not cause the overall `check()` to report "missing" — because those fields are expected to arrive via incremental delivery.
+When `@defer` is active, client extension fields inside the block are expected to be absent. Their "missing" status should not propagate to the overall `check()` result.
 
 ## Reproduction
 
@@ -42,21 +42,6 @@ When `@defer` is active, any fields inside the block that are missing (whether c
 npm install
 npm run relay
 npm run repro
-```
-
-**Output (without fix):**
-```
-=== Approach 3: shouldDefer=true, check BEFORE incremental arrives ===
-    Deferred fields have not arrived yet — defer is active.
-  Store pin-1: {"__id":"pin-1","__typename":"Pin","id":"pin-1","title":"Test Pin","imageUrl":"https://example.com/image.png"}
-  check(shouldDefer:true)  → missing
-  With fix: should be "available" (defer is active, missing fields expected)
-  Without fix: "missing" (deferred field absence leaks out)
-```
-
-**Output (with fix):**
-```
-  check(shouldDefer:true)  → available
 ```
 
 ## Fix
@@ -70,8 +55,8 @@ case 'Stream': {
     selection.if == null ||
     Boolean(this._getVariableValue(selection.if));
   if (isDeferred) {
-    // Defer is active: fields may arrive via incremental delivery.
-    // Their absence should not cause check() to return "missing".
+    // Defer is active: client extension fields inside are expected to
+    // be absent. Their missing status should not propagate.
     const prevRecordWasMissing = this._recordWasMissing;
     this._traverseSelections(selection.selections, dataID);
     this._recordWasMissing = prevRecordWasMissing;
