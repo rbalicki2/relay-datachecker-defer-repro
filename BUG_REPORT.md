@@ -1,14 +1,14 @@
-# Bug: `environment.check()` reports "missing" when client extension fields are absent inside active `@defer` blocks
+# Bug: `environment.check()` incorrectly returns "missing" when client extension fields are inside `@defer`
 
 ## Summary
 
-When a query uses `@defer` and the deferred fragment contains client extension fields, `environment.check()` incorrectly returns `{status: 'missing'}` even when all server-delivered data is present in the store.
-
-Client extension fields are never server-delivered — they are expected to be absent. The `ClientExtension` case in `DataChecker` correctly handles this by saving/restoring `_recordWasMissing`. But when those same client extension fields are nested inside a `@defer` block, the `Defer` case does **not** save/restore `_recordWasMissing`, so the "missing" status leaks out.
+`environment.check()` returns `{status: 'missing'}` when a deferred fragment contains client extension fields, even though all server-delivered data is present in the store. Client extension fields are never server-delivered and should not affect the check result.
 
 ## Root Cause
 
 **File:** `packages/relay-runtime/store/DataChecker.js`
+
+The `Defer` case does not save/restore `_recordWasMissing`, so any "missing" state from traversing inside the defer block leaks out:
 
 ```javascript
 case 'Defer':

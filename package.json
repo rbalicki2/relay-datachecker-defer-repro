@@ -2,7 +2,7 @@
   "name": "relay-defer-check-bug",
   "version": "1.0.0",
   "private": true,
-  "description": "Reproduction: environment.check() returns 'missing' during @defer streaming",
+  "description": "Reproduction: environment.check() returns 'missing' when client extensions are inside @defer",
   "scripts": {
     "relay": "relay-compiler",
     "repro": "node repro.mjs"

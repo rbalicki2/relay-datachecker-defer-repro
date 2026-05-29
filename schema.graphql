@@ -1,40 +1,12 @@
 directive @defer(label: String, if: Boolean = true) on FRAGMENT_SPREAD | INLINE_FRAGMENT
-directive @stream(label: String, initial_count: Int!, if: Boolean = true) on FIELD
 
 type Query {
-  feed(first: Int, after: String): FeedConnection
-  node(id: ID!): Node
-  viewer: Viewer
+  user(id: ID!): User
 }
 
-interface Node {
-  id: ID!
-}
-
-type Viewer {
+type User {
   id: ID!
   name: String
-}
-
-type FeedConnection {
-  edges: [FeedEdge]
-  pageInfo: PageInfo!
-}
-
-type PageInfo {
-  hasNextPage: Boolean!
-  endCursor: String
-}
-
-type FeedEdge {
-  cursor: String!
-  node: Pin
-}
-
-type Pin implements Node {
-  id: ID!
-  title: String
-  imageUrl: String
-  description: String
-  link: String
+  email: String
+  bio: String
 }
